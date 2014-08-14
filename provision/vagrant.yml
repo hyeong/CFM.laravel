@@ -1,0 +1,6 @@
+# This is based on https://danielgroves.net/notebook/2014/05/development-environments/
+# Subsequent tasks directories may have their own notes contained within
+- hosts: all
+  roles:
+      - setup
+      - deploy

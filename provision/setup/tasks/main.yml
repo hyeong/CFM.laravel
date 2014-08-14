@@ -1,0 +1,187 @@
+# Sources 
+# [1] http://labs.qandidate.com/blog/2013/11/21/installing-a-lamp-server-with-ansible-playbooks-and-roles/
+# [2] https://github.com/gaspaio/ansible-repository/blob/master/php/tasks/phpdev.yml
+# [3] http://stackoverflow.com/a/25047243/5738
+# [4] http://stackoverflow.com/a/24165405/5738
+- name: Install apt packages # [1]
+  apt: 
+    pkg={{ item }}
+    state=latest 
+    update_cache=yes
+  with_items:
+    - apache2
+    - libapache2-mod-php5
+    - php5-mcrypt
+    - php5-mysql
+    - mysql-server
+    - python-mysqldb
+    - git
+
+- name: Start Apache2 # [1]
+  service:
+    name=apache2
+    state=running
+    enabled=yes
+
+- name: Update the default http site in apache
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    regexp="DocumentRoot \/var\/www\/html"
+    backrefs=true
+    line="DocumentRoot /var/www/public"
+
+- name: Enable Pretty Urls Part 1
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="<Directory /var/www/public>"
+
+- name: Enable Pretty Urls Part 2
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="Options +FollowSymLinks"
+
+- name: Enable Pretty Urls Part 3
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="RewriteEngine On"
+
+- name: Enable Pretty Urls Part 4
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="RewriteCond %{REQUEST_FILENAME} !-d"
+
+- name: Enable Pretty Urls Part 5
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="RewriteCond %{REQUEST_FILENAME} !-f"
+
+- name: Enable Pretty Urls Part 6
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="RewriteRule ^ index.php [L]"
+
+- name: Enable Pretty Urls Part 7
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="</Directory>"
+
+- name: Enable mod rewrite
+  file:
+    src=/etc/apache2/mods-available/rewrite.load
+    dest=/etc/apache2/mods-enabled/rewrite.load
+    state=link
+  notify:
+    - restart apache
+
+- name: Make php5-mcrypt actually load in Apache2
+  file:
+    src=/etc/php5/mods-available/mcrypt.ini
+    dest=/etc/php5/cli/conf.d/mcrypt.ini
+    state=link
+  notify:
+    - restart apache
+
+- name: Create MySQL Database # [1]
+  mysql_db: 
+    name={{ database_name }}
+    state=present
+    collation=utf8_general_ci
+
+- name: Create MySQL User # [1]
+  mysql_user:
+    name={{ database_username }}
+    password={{ database_password }}
+    priv={{ database_name }}.*:ALL 
+    host=localhost 
+    state=present
+
+- name: Download composer # [2]
+  shell: 
+    test -f /usr/local/bin/composer || curl -sS https://getcomposer.org/installer | /usr/bin/php
+    chdir=/home/vagrant
+    creates=/home/vagrant/composer.phar
+  async: 7200
+
+- name: Move composer to usr/local/bin # [4]
+  command:
+    mv -f /home/vagrant/composer.phar /usr/local/bin/composer
+    creates=/usr/local/bin/composer
+
+- name: Update composer package
+  shell:
+    composer self-update
+  async: 7200
+
+- name: Set composer defaults - timeout
+  shell:
+    composer config --global process-timeout 7200
+
+- name: Set composer defaults - protocols
+  shell:
+    composer config --global github-protocols https
+
+- name: Set composer defaults - notify
+  shell:
+    composer config --global notify-on-install false
+
+- name: Build composer.json
+  shell:
+    composer create-project laravel/laravel laravel --no-interaction
+    chdir=/var/www
+    creates=/var/www/laravel/composer.json
+  async: 7200
+
+- name: Ensure the way/generators have been added
+  shell:
+    grep "way/generators" composer.json || composer require --dev "way/generators:2.*"
+    chdir=/var/www/laravel
+  async: 7200
+
+- name: Ensure the fzaninotto/faker have been added
+  shell:
+    chdir=/var/www/laravel
+    grep "fzaninotto/faker" composer.json || composer require --dev "fzaninotto/faker:1.*"
+  async: 7200
+
+- name: Add way/generators to the app/config/app.php # [3]
+  lineinfile:
+    dest=/var/www/laravel/app/config/app.php
+    insertafter="^\s*'Illuminate\\\\Workbench\\\\WorkbenchServiceProvider',"
+    line="{{'\t'}}{{'\t'}}'Way\\Generators\\GeneratorsServiceProvider',"
+
+- name: Create sensitive configuration file
+  copy:
+    dest=/var/www/laravel/.env.php
+    src=var_www_laravel_.env.php
+    force=no
+
+- name: Set database credentials in sensitive file - username
+  lineinfile:
+    dest=/var/www/laravel/.env.php
+    insertafter="return array\("
+    line="{{'\t'}}'database_username' => '{{ database_username }}',"
+
+- name: Set database credentials in sensitive file - password
+  lineinfile:
+    dest=/var/www/laravel/.env.php
+    insertafter="return array\("
+    line="{{'\t'}}'database_password' => '{{ database_password }}',"
+
+- name: Set database credentials in sensitive file - database name
+  lineinfile:
+    dest=/var/www/laravel/.env.php
+    insertafter="return array\("
+    line="{{'\t'}}'database_name' => '{{ database_name }}',"
+
+- name: Rebuild the database configuration file
+  copy:
+    dest=/var/www/laravel/app/config/database.php
+    src=var_www_laravel_app_config_database.php
+    force=yes

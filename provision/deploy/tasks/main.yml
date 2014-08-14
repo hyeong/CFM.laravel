@@ -1,0 +1,15 @@
+- name: update composer dependencies
+  shell:
+    composer update --dev
+    chdir=/var/www/laravel
+  async: 7200
+
+- name: Ensure databases are up-to-date
+  shell:
+    php /var/www/laravel/artisan migrate -n
+    chdir=/var/www/laravel
+
+- name: Start laraval's web service at TCP/8000
+  command: php /var/www/laravel/artisan serve --host 0.0.0.0 -q
+  async: 0
+  poll: 0
