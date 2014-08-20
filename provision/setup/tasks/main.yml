@@ -17,76 +17,25 @@
     - python-mysqldb
     - git
 
-- name: Start Apache2 # [1]
+- name: Stop Apache2 # [1]
   service:
     name=apache2
-    state=running
-    enabled=yes
+    state=stopped
+    enabled=no
 
-- name: Update the default http site in apache
+- name: Set Vagrant user as the user running Apache
   lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    regexp="DocumentRoot \/var\/www\/html"
-    backrefs=true
-    line="DocumentRoot /var/www/public"
+    dest=/etc/apache2/envvars
+    regexp="^export APACHE_RUN_USER=.*$"
+    line="export APACHE_RUN_USER=vagrant"
+    backrefs=yes
 
-- name: Enable Pretty Urls Part 1
+- name: Set Vagrant group as the group running Apache
   lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="<Directory /var/www/public>"
-
-- name: Enable Pretty Urls Part 2
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="Options +FollowSymLinks"
-
-- name: Enable Pretty Urls Part 3
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="RewriteEngine On"
-
-- name: Enable Pretty Urls Part 4
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="RewriteCond %{REQUEST_FILENAME} !-d"
-
-- name: Enable Pretty Urls Part 5
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="RewriteCond %{REQUEST_FILENAME} !-f"
-
-- name: Enable Pretty Urls Part 6
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="RewriteRule ^ index.php [L]"
-
-- name: Enable Pretty Urls Part 7
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="</Directory>"
-
-- name: Enable mod rewrite
-  file:
-    src=/etc/apache2/mods-available/rewrite.load
-    dest=/etc/apache2/mods-enabled/rewrite.load
-    state=link
-  notify:
-    - restart apache
-
-- name: Make php5-mcrypt actually load in Apache2
-  file:
-    src=/etc/php5/mods-available/mcrypt.ini
-    dest=/etc/php5/cli/conf.d/mcrypt.ini
-    state=link
-  notify:
-    - restart apache
+    dest=/etc/apache2/envvars
+    regexp="^export APACHE_RUN_GROUP=.*$"
+    line="export APACHE_RUN_GROUP=vagrant"
+    backrefs=yes
 
 - name: Create MySQL Database # [1]
   mysql_db: 
@@ -185,3 +134,66 @@
     dest=/var/www/laravel/app/config/database.php
     src=var_www_laravel_app_config_database.php
     force=yes
+
+- name: Update the default http site in apache
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    regexp="DocumentRoot \/var\/www\/html"
+    backrefs=true
+    line="DocumentRoot /var/www/laravel/public"
+
+- name: Enable Pretty Urls
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="<Directory /var/www/laravel/public>\nOptions +FollowSymLinks\nRewriteEngine On\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteRule ^ index.php [L]\n</Directory>"
+
+- name: Enable mod rewrite
+  file:
+    src=/etc/apache2/mods-available/rewrite.load
+    dest=/etc/apache2/mods-enabled/rewrite.load
+    state=link
+  notify:
+    - restart apache
+
+- name: Enable php5.load in apache
+  file:
+    src=/etc/apache2/mods-available/php5.load
+    dest=/etc/apache2/mods-enabled/php5.load
+    state=link
+  notify:
+    - restart apache
+
+- name: Enable php5.conf in apache
+  file:
+    src=/etc/apache2/mods-available/php5.conf
+    dest=/etc/apache2/mods-enabled/php5.conf
+    state=link
+  notify:
+    - restart apache
+
+- name: Make php5-mcrypt actually load in Apache
+  file:
+    src=/etc/php5/mods-available/mcrypt.ini
+    dest=/etc/php5/apache2/conf.d/10-mcrypt.ini
+    state=link
+
+- name: Make php5-mcrypt actually load in PHP5 cli
+  file:
+    src=/etc/php5/mods-available/mcrypt.ini
+    dest=/etc/php5/cli/conf.d/10-mcrypt.ini
+    state=link
+  notify:
+    - restart apache
+
+- name: Make www-data a member of the vagrant group
+  user:
+    name=www-data
+    groups=vagrant
+    append=yes
+
+- name: Start Apache2 # [1]
+  service:
+    name=apache2
+    state=started
+    enabled=yes
