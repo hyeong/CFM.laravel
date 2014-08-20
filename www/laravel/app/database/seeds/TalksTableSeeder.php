@@ -31,7 +31,7 @@ class TalksTableSeeder extends Seeder {
 			}
 			if ($faker->boolean()) {
 				if ($faker->boolean()) {
-					$json['plus'] = "https://plus.google.com/" . $faker->randomNumber($faker->numberBetween(5, 25));
+					$json['plus'] = "https://plus.google.com/" . $faker->randomNumber($faker->numberBetween(5, 9));
 				} else {
 					$json['plus'] = "https://plus.google.com/+" . $faker->username();
 				}
