@@ -11,6 +11,10 @@
 |
 */
 
+Route::group(['prefix' => 'api/v1'], function() {
+	Route::resource('talks', 'TalkController');
+});
+
 Route::get('/', function()
 {
 	return View::make('hello');
