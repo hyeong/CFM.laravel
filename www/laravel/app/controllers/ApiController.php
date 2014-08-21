@@ -16,19 +16,27 @@ class ApiController extends \BaseController {
 	}
 
 	public function respondCreated($data) {
-		$this->setStatusCode(IlluminateResponse::HTTP_CREATED)->respond($data);
+		return $this->setStatusCode(IlluminateResponse::HTTP_CREATED)->respond($data);
+	}
+
+	public function respondGone($message = "http.Gone") {
+		return $this->setStatusCode(IlluminateResponse::HTTP_GONE)->respondWithError($message);
+	}
+
+	public function respondBadRequest($message = "http.Bad_request") {
+		return $this->setStatusCode(IlluminateResponse::HTTP_BAD_REQUEST)->respondWithError($message);
 	}
 
 	public function respondUnprocessable($message = "http.Unprocessable") {
-		return $this->setStatusCode(IlluminateResponse::HTTP_UNPROCESSABLE_ENTITY)->respondWithError(trans($message));
+		return $this->setStatusCode(IlluminateResponse::HTTP_UNPROCESSABLE_ENTITY)->respondWithError($message);
 	}
 
 	public function respondForbidden($message = "http.Forbidden") {
-		return $this->setStatusCode(IlluminateResponse::HTTP_FORBIDDEN)->respondWithError(trans($message));
+		return $this->setStatusCode(IlluminateResponse::HTTP_FORBIDDEN)->respondWithError($message);
 	}
 
 	public function respondNotFound($message = "http.Not_found") {
-		return $this->setStatusCode(IlluminateResponse::HTTP_NOT_FOUND)->respondWithError(trans($message));
+		return $this->setStatusCode(IlluminateResponse::HTTP_NOT_FOUND)->respondWithError($message);
 	}
 
 	public function respond($data, $headers = []) {
@@ -36,9 +44,17 @@ class ApiController extends \BaseController {
 	}
 
 	public function respondWithError($message) {
+		if (is_array($message)) {
+			$final_messages = [];
+			foreach ($message as $entry) {
+				$final_messages[] = trans($message);
+			}
+		} else {
+			$final_messages = [trans($message)];
+		}
 		return $this->respond([
 			'error' => [
-				'message'	=> $message,
+				'messages'	=> $final_messages,
 				'status_code'	=> $this->getStatusCode()
 			]
 		]);

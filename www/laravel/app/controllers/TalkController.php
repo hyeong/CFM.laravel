@@ -8,8 +8,13 @@ class TalkController extends ApiController {
 	 * @var CampFireManager\Transformers\TalkTransformer
 	 */
 	protected $TalkTransformer;
+	/**
+	 * @var Talk
+	 */
+	protected $Talk;
 
-	public function __construct(TalkTransformer $TalkTransformer) {
+	public function __construct(Talk $Talk, TalkTransformer $TalkTransformer) {
+		$this->Talk = $Talk;
 		$this->TalkTransformer = $TalkTransformer;
 		$this->beforeFilter('auth.basic', ['on' => 'post']);
 	}
@@ -24,7 +29,7 @@ class TalkController extends ApiController {
 	{
 		$limit = Input::get('limit', 25); // If the limit isn't set, make it 25
 		$limit = $limit > 250 ? 250 : $limit; // If the limit is greater than 250, make it 250
-		$talks = Talk::paginate($limit);
+		$talks = $this->Talk->paginate($limit);
 		return $this->respondWithPagination($talks, [
 			'data' => $this->TalkTransformer->transformCollection($talks->all())
 		]);
@@ -49,12 +54,11 @@ class TalkController extends ApiController {
 	 */
 	public function store()
 	{
-		// Content checking occurs here
-		if (! Input::get('name')) {
-			return $this->respondUnprocessable('talk.name not provided');
+		if (! $this->Talk->fill(Input::all())->checkFormatting()->isValid()) {
+			return $this->respondUnprocessable($this->Talk->errors);
 		}
-		$talk = Talk::create(Input::all());
-		return $this->respondCreated($this->TalkTransformer->transform($talk));
+		$this->Talk->save();
+		return $this->respondCreated($this->TalkTransformer->transform($this->Talk));
 	}
 
 	/**
@@ -70,7 +74,7 @@ class TalkController extends ApiController {
 	public function show($id)
 	{
 		try {
-			return $this->TalkTransformer->transform(Talk::findOrFail($id));
+			return ['data' => $this->TalkTransformer->transform($this->Talk->findOrFail($id))];
 		} catch (Eloquent\ModelNotFoundException $exception) {
 			return $this->respondNotFound();
 		}
