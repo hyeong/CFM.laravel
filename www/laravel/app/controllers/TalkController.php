@@ -36,17 +36,6 @@ class TalkController extends ApiController {
 	}
 
 	/**
-	 * Show the form for creating a new resource.
-	 * GET /talk/create
-	 *
-	 * @return Response
-	 */
-	public function create()
-	{
-		//
-	}
-
-	/**
 	 * Store a newly created resource in storage.
 	 * POST /talk
 	 *
@@ -81,18 +70,6 @@ class TalkController extends ApiController {
 	}
 
 	/**
-	 * Show the form for editing the specified resource.
-	 * GET /talk/{id}/edit
-	 *
-	 * @param  int  $id
-	 * @return Response
-	 */
-	public function edit($id)
-	{
-		//
-	}
-
-	/**
 	 * Update the specified resource in storage.
 	 * PUT /talk/{id}
 	 *
@@ -112,6 +89,26 @@ class TalkController extends ApiController {
 	 * @return Response
 	 */
 	public function destroy($id)
+	{
+	/**
+	 * Show the form for editing the specified resource.
+	 * GET /talk/{id}/edit
+	 *
+	 * @param  int  $id
+	 * @return Response
+	 */
+	public function edit($id)
+	{
+		//
+	}
+
+	/**
+	 * Show the form for creating a new resource.
+	 * GET /talk/create
+	 *
+	 * @return Response
+	 */
+	public function create()
 	{
 		//
 	}
