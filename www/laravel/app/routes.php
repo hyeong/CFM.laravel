@@ -14,6 +14,7 @@
 Route::group(['prefix' => 'api/v1'], function() {
 	Route::resource('talks', 'TalkController');
 	Route::resource('slots', 'SlotController');
+	Route::resource('defaultslots', 'DefaultslotController');
 });
 
 Route::get('/', function()
