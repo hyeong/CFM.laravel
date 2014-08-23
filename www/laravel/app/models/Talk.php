@@ -18,7 +18,6 @@ class Talk extends GenericModel {
 		if (is_array($this->other_presenters)) {
 			$this->other_presenters = json_encode($this->other_presenters);
 		}
-		return $this;
+		return parent::checkFormatting();
 	}
-
 }

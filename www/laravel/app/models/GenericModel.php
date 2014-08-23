@@ -24,5 +24,8 @@ abstract class GenericModel extends \Eloquent {
 		return false;
 	}
 
-
+	public function checkFormatting()
+	{
+		return $this;
+	}
 }
