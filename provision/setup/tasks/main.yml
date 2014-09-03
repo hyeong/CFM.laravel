@@ -37,6 +37,44 @@
     line="export APACHE_RUN_GROUP=vagrant"
     backrefs=yes
 
+- name: Update the default http site in apache
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    regexp="DocumentRoot \/var\/www\/html"
+    backrefs=true
+    line="DocumentRoot /var/www/laravel/public"
+
+- name: Enable Pretty Urls
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    insertbefore="</VirtualHost>"
+    line="<Directory /var/www/laravel/public>\nOptions +FollowSymLinks\nRewriteEngine On\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteRule ^ index.php [L]\n</Directory>"
+
+- name: Enable apache mods
+  file:
+    src='/etc/apache2/mods-available/{{ item }}'
+    dest='/etc/apache2/mods-enabled/{{ item }}'
+    state=link
+  with_items:
+    - rewrite.load
+    - php5.load
+    - php5.conf
+
+- name: Make www-data a member of the vagrant group
+  user:
+    name=www-data
+    groups=vagrant
+    append=yes
+
+- name: Enable PHP extensions
+  file:
+    src='/etc/php5/mods-available/{{ item[0] }}'
+    dest='/etc/php5/{{ item[1] }}/conf.d/{{ item[0] }}'
+    state=link
+  with_nested:
+    - [ 'mcrypt.ini' ]
+    - [ 'apache2', 'cli' ]
+
 - name: Create MySQL Database # [1]
   mysql_db: 
     name={{ database_name }}
@@ -68,17 +106,13 @@
     composer self-update
   async: 7200
 
-- name: Set composer defaults - timeout
+- name: Set composer defaults
   shell:
-    composer config --global process-timeout 7200
-
-- name: Set composer defaults - protocols
-  shell:
-    composer config --global github-protocols https
-
-- name: Set composer defaults - notify
-  shell:
-    composer config --global notify-on-install false
+    composer config --global {{ item.key }} {{ item.value }}
+  with_items:
+    - { key: 'process-timeout', value: '7200' }
+    - { key: 'github-protocols', value: 'https' }
+    - { key: 'notify-on-install', value: 'false' }
 
 - name: Build composer.json
   shell:
@@ -87,23 +121,43 @@
     creates=/var/www/laravel/composer.json
   async: 7200
 
-- name: Ensure the way/generators have been added
+- name: Ensure the composer modules have been added
   shell:
-    grep "way/generators" composer.json || composer require --dev "way/generators:2.*"
+    grep "{{ item.name }}" composer.json || composer require --no-update --dev "{{ item.name }}:{{ item.version }}"
+    chdir=/var/www/laravel
+  with_items:
+    - { name: "way/generators", version: "2.*" }
+    - { name: "fzaninotto/faker", version: "1.*" }
+    - { name: "barryvdh/laravel-ide-helper", version: "1.*" }
+    - { name: "doctrine/dbal", version: "~2.3" }
+    - { name: "phpunit/phpunit", version: "3.7.*" }
+
+- name: Get the composer modules
+  shell:
+    composer update
     chdir=/var/www/laravel
   async: 7200
 
-- name: Ensure the fzaninotto/faker have been added
-  shell:
-    chdir=/var/www/laravel
-    grep "fzaninotto/faker" composer.json || composer require --dev "fzaninotto/faker:1.*"
-  async: 7200
-
-- name: Add way/generators to the app/config/app.php # [3]
+- name: Add Service Providers to the app/config/app.php # [3]
   lineinfile:
     dest=/var/www/laravel/app/config/app.php
     insertafter="^\s*'Illuminate\\\\Workbench\\\\WorkbenchServiceProvider',"
-    line="{{'\t'}}{{'\t'}}'Way\\Generators\\GeneratorsServiceProvider',"
+    line="{{'\t'}}{{'\t'}}'{{ item }}',"
+  with_items:
+    - "Barryvdh\\LaravelIdeHelper\\IdeHelperServiceProvider"
+    - "Way\\Generators\\GeneratorsServiceProvider"
+
+- name: Rebuild the laravel-ide-helper file
+  shell:
+    chdir=/var/www/laravel
+    php artisan clear-compiled && php artisan ide-helper:generate && php artisan optimize
+  async: 7200
+
+- name: Encourage the laravel-ide-helper to run on composer update
+  lineinfile:
+    dest=/var/www/laravel/composer.json
+    insertafter='^\s*"post-update-cmd". \[\n\s*"php artisan clear-compiled",'
+    line="{{'\t'}}{{'\t'}}{{'\t'}}\"php artisan ide-helper:generate\","
 
 - name: Create sensitive configuration file
   copy:
@@ -111,86 +165,21 @@
     src=var_www_laravel_.env.php
     force=no
 
-- name: Set database credentials in sensitive file - username
+- name: Set database credentials in sensitive file
   lineinfile:
     dest=/var/www/laravel/.env.php
     insertafter="return array\("
-    line="{{'\t'}}'database_username' => '{{ database_username }}',"
-
-- name: Set database credentials in sensitive file - password
-  lineinfile:
-    dest=/var/www/laravel/.env.php
-    insertafter="return array\("
-    line="{{'\t'}}'database_password' => '{{ database_password }}',"
-
-- name: Set database credentials in sensitive file - database name
-  lineinfile:
-    dest=/var/www/laravel/.env.php
-    insertafter="return array\("
-    line="{{'\t'}}'database_name' => '{{ database_name }}',"
+    line="{{'\t'}}'{{ item.key }}' => '{{ item.value }}',"
+  with_items:
+    - { key: 'database_username', value: '{{ database_username }}' }
+    - { key: 'database_password', value: '{{ database_password }}' }
+    - { key: 'database_name', value: '{{ database_name }}' }
 
 - name: Rebuild the database configuration file
   copy:
     dest=/var/www/laravel/app/config/database.php
     src=var_www_laravel_app_config_database.php
     force=yes
-
-- name: Update the default http site in apache
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    regexp="DocumentRoot \/var\/www\/html"
-    backrefs=true
-    line="DocumentRoot /var/www/laravel/public"
-
-- name: Enable Pretty Urls
-  lineinfile:
-    dest=/etc/apache2/sites-available/000-default.conf
-    insertbefore="</VirtualHost>"
-    line="<Directory /var/www/laravel/public>\nOptions +FollowSymLinks\nRewriteEngine On\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteRule ^ index.php [L]\n</Directory>"
-
-- name: Enable mod rewrite
-  file:
-    src=/etc/apache2/mods-available/rewrite.load
-    dest=/etc/apache2/mods-enabled/rewrite.load
-    state=link
-  notify:
-    - restart apache
-
-- name: Enable php5.load in apache
-  file:
-    src=/etc/apache2/mods-available/php5.load
-    dest=/etc/apache2/mods-enabled/php5.load
-    state=link
-  notify:
-    - restart apache
-
-- name: Enable php5.conf in apache
-  file:
-    src=/etc/apache2/mods-available/php5.conf
-    dest=/etc/apache2/mods-enabled/php5.conf
-    state=link
-  notify:
-    - restart apache
-
-- name: Make php5-mcrypt actually load in Apache
-  file:
-    src=/etc/php5/mods-available/mcrypt.ini
-    dest=/etc/php5/apache2/conf.d/10-mcrypt.ini
-    state=link
-
-- name: Make php5-mcrypt actually load in PHP5 cli
-  file:
-    src=/etc/php5/mods-available/mcrypt.ini
-    dest=/etc/php5/cli/conf.d/10-mcrypt.ini
-    state=link
-  notify:
-    - restart apache
-
-- name: Make www-data a member of the vagrant group
-  user:
-    name=www-data
-    groups=vagrant
-    append=yes
 
 - name: Start Apache2 # [1]
   service:
